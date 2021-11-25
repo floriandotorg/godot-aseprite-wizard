@@ -48,6 +48,10 @@ func _is_loop_config_enabled() -> String:
 	return config.get_value('aseprite', 'loop_enabled', true)
 
 
+func _is_trim_optimisation_enabled() -> bool:
+	return config.get_value('aseprite', 'trim_optimisation', false)
+
+
 func _aseprite_list_layers(file_name: String, only_visible = false) -> Array:
 	var output = []
 	var arguments = ["-b", "--list-layers", file_name]
@@ -72,6 +76,7 @@ func _aseprite_export_spritesheet(file_name: String, output_folder: String, opti
 	var exception_pattern = options.get('exception_pattern', "")
 	var only_visible_layers = options.get('only_visible_layers', false)
 	var output_name = file_name if options.get('output_filename') == "" else options.get('output_filename')
+	var trim_opt_used = false
 	var basename = _get_file_basename(output_name)
 	var output_dir = output_folder.replace("res://", "./")
 	var data_file = "%s/%s.json" % [output_dir, basename]
@@ -95,9 +100,11 @@ func _aseprite_export_spritesheet(file_name: String, output_folder: String, opti
 
 	if options.get('trim_images', false):
 		arguments.push_front("--trim")
-
-	if options.get('trim_by_grid', false):
+	elif options.get('trim_by_grid', false):
 		arguments.push_front('--trim-by-grid')
+	elif _is_trim_optimisation_enabled():
+		arguments.push_front("--trim")
+		trim_opt_used = true
 
 	if exception_pattern != "":
 		_add_ignore_layer_arguments(file_name, arguments, exception_pattern)
@@ -109,8 +116,9 @@ func _aseprite_export_spritesheet(file_name: String, output_folder: String, opti
 		print(output)
 		return {}
 	return {
-		'data_file': data_file.replace("./", "res://"),
-		"sprite_sheet": sprite_sheet.replace("./", "res://")
+		"data_file": data_file.replace("./", "res://"),
+		"sprite_sheet": sprite_sheet.replace("./", "res://"),
+		"trim_optimisation": trim_opt_used
 	}
 
 
@@ -143,6 +151,7 @@ func _aseprite_export_layer(file_name: String, layer_name: String, output_folder
 	var output_prefix = options.get('output_filename', "")
 	var data_file = "%s/%s%s.json" % [output_folder, output_prefix, layer_name]
 	var sprite_sheet = "%s/%s%s.png" % [output_folder, output_prefix, layer_name]
+	var trim_opt_used = false
 	var output = []
 
 	var arguments = [
@@ -161,9 +170,11 @@ func _aseprite_export_layer(file_name: String, layer_name: String, output_folder
 
 	if options.get('trim_images', false):
 		arguments.push_front("--trim")
-
-	if options.get('trim_by_grid', false):
+	elif options.get('trim_by_grid', false):
 		arguments.push_front('--trim-by-grid')
+	elif _is_trim_optimisation_enabled():
+		arguments.push_front("--trim")
+		trim_opt_used = true
 
 	var exit_code = OS.execute(_aseprite_command(), arguments, true, output, true)
 
@@ -173,8 +184,9 @@ func _aseprite_export_layer(file_name: String, layer_name: String, output_folder
 		return {}
 
 	return {
-		'data_file': data_file.replace("./", "res://"),
-		"sprite_sheet": sprite_sheet.replace("./", "res://")
+		"data_file": data_file.replace("./", "res://"),
+		"sprite_sheet": sprite_sheet.replace("./", "res://"),
+		"trim_optimisation": trim_opt_used
 	}
 
 
@@ -290,6 +302,7 @@ func _get_file_basename(file_path: String) -> String:
 func _import(data) -> int:
 	var source_file = data.data_file
 	var sprite_sheet = data.sprite_sheet
+	var trim_opt_used = data.trim_optimisation
 	var file = File.new()
 	var err = file.open(source_file, File.READ)
 	if err != OK:
@@ -301,7 +314,7 @@ func _import(data) -> int:
 
 	var texture = _parse_texture_path(sprite_sheet)
 
-	var resource = _create_sprite_frames_with_animations(content, texture)
+	var resource = _create_sprite_frames_with_animations(content, texture, trim_opt_used)
 
 	var save_path = "%s.%s" % [source_file.get_basename(), "res"]
 	var code =  ResourceSaver.save(save_path, resource, ResourceSaver.FLAG_REPLACE_SUBRESOURCE_PATHS)
@@ -309,7 +322,7 @@ func _import(data) -> int:
 	return code
 
 
-func _create_sprite_frames_with_animations(content, texture):
+func _create_sprite_frames_with_animations(content, texture, trim_opt_used):
 	var frames = _get_frames_from_content(content)
 	var sprite_frames = SpriteFrames.new()
 	sprite_frames.remove_animation("default")
@@ -317,9 +330,9 @@ func _create_sprite_frames_with_animations(content, texture):
 	if content.meta.has("frameTags") and content.meta.frameTags.size() > 0:
 		for tag in content.meta.frameTags:
 			var selected_frames = frames.slice(tag.from, tag.to)
-			_add_animation_frames(sprite_frames, tag.name, selected_frames, texture, tag.direction)
+			_add_animation_frames(sprite_frames, tag.name, selected_frames, texture, trim_opt_used, tag.direction)
 	else:
-		_add_animation_frames(sprite_frames, "default", frames, texture)
+		_add_animation_frames(sprite_frames, "default", frames, texture, trim_opt_used)
 
 	return sprite_frames
 
@@ -328,7 +341,7 @@ func _get_frames_from_content(content):
 	return content.frames if typeof(content.frames) == TYPE_ARRAY  else content.frames.values()
 
 
-func _add_animation_frames(sprite_frames, anim_name, frames, texture, direction = 'forward'):
+func _add_animation_frames(sprite_frames, anim_name, frames, texture, trim_opt_used, direction = 'forward'):
 	var animation_name = anim_name
 	var is_loopable = _is_loop_config_enabled()
 
@@ -345,7 +358,7 @@ func _add_animation_frames(sprite_frames, anim_name, frames, texture, direction 
 		frames.invert()
 
 	for frame in frames:
-		var atlas = _create_atlastexture_from_frame(texture, frame)
+		var atlas = _create_atlastexture_from_frame(texture, frame, trim_opt_used)
 		var number_of_sprites = ceil(frame.duration / min_duration)
 		for _i in range(number_of_sprites):
 			sprite_frames.add_frame(animation_name, atlas)
@@ -357,7 +370,7 @@ func _add_animation_frames(sprite_frames, anim_name, frames, texture, direction 
 		frames.invert()
 
 		for frame in frames:
-			var atlas = _create_atlastexture_from_frame(texture, frame)
+			var atlas = _create_atlastexture_from_frame(texture, frame, trim_opt_used)
 			var number_of_sprites = ceil(frame.duration / min_duration)
 			for _i in range(number_of_sprites):
 				sprite_frames.add_frame(animation_name, atlas)
@@ -365,8 +378,10 @@ func _add_animation_frames(sprite_frames, anim_name, frames, texture, direction 
 	sprite_frames.set_animation_loop(animation_name, is_loopable)
 	sprite_frames.set_animation_speed(animation_name, fps)
 
+
 func _calculate_fps(min_duration: int) -> float:
 	return ceil(1000 / min_duration)
+
 
 func _get_min_duration(frames) -> int:
 	var min_duration = 100000
@@ -374,6 +389,7 @@ func _get_min_duration(frames) -> int:
 		if frame.duration < min_duration:
 			min_duration = frame.duration
 	return min_duration
+
 
 func _parse_texture_path(path):
 	if not _should_check_file_system and not ResourceLoader.has_cached(path):
@@ -393,11 +409,20 @@ func _is_valid_aseprite_spritesheet(content):
 	return content.has("frames") and content.has("meta") and content.meta.has('image')
 
 
-func _create_atlastexture_from_frame(image, frame_data):
+func _create_atlastexture_from_frame(image, frame_data, trim_opt_used):
 	var atlas = AtlasTexture.new()
 	var frame = frame_data.frame
 	atlas.atlas = image
 	atlas.region = Rect2(frame.x, frame.y, frame.w, frame.h)
+
+	if trim_opt_used:
+		var sprite_source_size = frame_data.spriteSourceSize
+		var source_size = frame_data.sourceSize
+		atlas.margin = Rect2(
+				sprite_source_size.x, sprite_source_size.y, 
+				source_size.w - frame.w, source_size.h - frame.h
+		)
+
 	return atlas
 
 

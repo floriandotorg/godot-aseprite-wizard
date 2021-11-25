@@ -10,6 +10,7 @@ const _IMPORTER_ENABLE_KEY = 'is_importer_enabled'
 const _REMOVE_SOURCE_FILES_KEY = 'remove_source_files'
 const _LOOP_ENABLED = 'loop_enabled'
 const _LOOP_EXCEPTION_PREFIX = 'loop_config_prefix'
+const _TRIM_OPTIMISATION_KEY = 'trim_optimisation'
 
 const _DEFAULT_LOOP_EX_PREFIX = '_'
 
@@ -22,6 +23,7 @@ func _ready():
 	_remove_source_files_field().pressed = config.get_value(_CONFIG_SECTION_KEY, _REMOVE_SOURCE_FILES_KEY, false)
 	_enable_animation_loop().pressed = config.get_value(_CONFIG_SECTION_KEY, _LOOP_ENABLED, true)
 	_loop_ex_prefix().text = config.get_value(_CONFIG_SECTION_KEY, _LOOP_EXCEPTION_PREFIX, _DEFAULT_LOOP_EX_PREFIX)
+	_enable_trim_opt().pressed = config.get_value(_CONFIG_SECTION_KEY, _TRIM_OPTIMISATION_KEY, false)
 
 func init(config_file: ConfigFile):
 	config = config_file
@@ -38,6 +40,7 @@ func _on_save_button_up():
 		self.emit_signal("importer_state_changed")
 
 	config.set_value(_CONFIG_SECTION_KEY, _REMOVE_SOURCE_FILES_KEY, _remove_source_files_field().pressed)
+	config.set_value(_CONFIG_SECTION_KEY, _TRIM_OPTIMISATION_KEY, _enable_trim_opt().pressed)
 	config.set_value(_CONFIG_SECTION_KEY, _LOOP_EXCEPTION_PREFIX, _loop_ex_prefix().text if _loop_ex_prefix().text != "" else _DEFAULT_LOOP_EX_PREFIX)
 	config.set_value(_CONFIG_SECTION_KEY, _LOOP_ENABLED, _enable_animation_loop().pressed)
 	emit_signal("config_saved")
@@ -66,6 +69,10 @@ func _remove_source_files_field() -> CheckBox:
 
 func _enable_animation_loop() -> CheckBox:
 	return $MarginContainer/VBoxContainer/loop_animations as CheckBox
+
+
+func _enable_trim_opt() -> CheckBox:
+	return $MarginContainer/VBoxContainer/enable_trim_opt as CheckBox
 
 
 func _loop_ex_prefix() -> LineEdit:
