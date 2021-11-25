@@ -36,6 +36,7 @@ If you are using Windows, a portable version or if the `aseprite` command is not
 | Aseprite Command Path   | Path to the aseprite executable. Default: `aseprite` |
 | Enable Aseprite Importer   | Enable/Disable Aseprite automatic importer. Default: `true` |
 | Remove Source Files   | Remove `*.json` and `*.png` files generated during import in Wizard. Default: `false` |
+| Trim optimisation     | Enable Spritesheet trimming. Does not help with file size, but helps not reaching Godot's file width/height limit. |
 | Loop animations       | Default animation loop configuration. Default: `true` |
 | Loop exception prefix | Animations with this prefix are imported with opposite loop configuration. For example, if your default configuration is Loop = true, animations starting with `_` would have Loop = false. The prefix is removed from the animation name (i.e  `_death` > `death`). Default: `_` |
 
